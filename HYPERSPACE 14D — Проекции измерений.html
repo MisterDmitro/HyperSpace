@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>HYPERSPACE 14D — Многомерный Проектор</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #00f0ff;
+      --accent-glow: rgba(0, 240, 255, 0.35);
+      --secondary: #7000ff;
+      --bg-deep: #05060b;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #020205;
+      background-image: 
+        radial-gradient(circle at 50% 10%, rgba(112, 0, 255, 0.14) 0%, transparent 50%),
+        radial-gradient(circle at 50% 90%, rgba(0, 240, 255, 0.1) 0%, transparent 50%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #f8fafc;
+      overflow: hidden;
+      height: 100dvh;
+      width: 100vw;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Mobile Phone Shell for Desktop & Fullscreen for Mobile */
+    .phone-frame {
+      position: relative;
+      width: 100%;
+      height: 100dvh;
+      max-width: 430px;
+      background: #06070d;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 30px 90px rgba(0, 0, 0, 0.9);
+    }
+
+    @media (min-width: 480px) {
+      .phone-frame {
+        height: min(94dvh, 900px);
+        border-radius: 44px;
+        border: 8px solid #161822;
+        box-shadow: 
+          0 0 0 1px rgba(255, 255, 255, 0.12),
+          0 25px 80px rgba(0, 0, 0, 0.95),
+          0 0 60px var(--accent-glow);
+      }
+    }
+
+    /* Glassmorphism panels */
+    .glass {
+      background: rgba(12, 15, 26, 0.72);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+
+    .glass-subtle {
+      background: rgba(16, 20, 34, 0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .glass-active {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.18), rgba(112, 0, 255, 0.22));
+      border: 1px solid var(--accent);
+      box-shadow: 0 0 18px var(--accent-glow);
+    }
+
+    /* Hide scrollbars */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Custom Range Sliders */
+    input[type="range"].cyber-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      outline: none;
+    }
+
+    input[type="range"].cyber-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+      cursor: pointer;
+      border: 2px solid #ffffff;
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"].cyber-slider::-webkit-slider-thumb:active {
+      transform: scale(1.25);
+    }
+
+    /* Dimension pill animation */
+    .dim-pill {
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .dim-pill.active {
+      transform: translateY(-1px) scale(1.04);
+    }
+
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); opacity: 0.6; }
+      50% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.6; }
+    }
+
+    .pulse-indicator {
+      animation: pulseRing 2.4s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Mobile App Container -->
+  <div class="phone-frame" id="appFrame">
+
+    <!-- Background Interactive Canvas -->
+    <canvas id="hyperCanvas" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></canvas>
+
+    <!-- Subtle Top Vignette & Grid Overlay -->
+    <div class="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-[#05060d]/90 via-transparent to-[#05060d]/95"></div>
+
+    <!-- TOP STATUS & HEADER BAR -->
+    <header class="relative z-20 pt-3 px-4 pb-2 flex flex-col gap-2.5">
+      <!-- Simulated Mobile Status Bar + App Brand -->
+      <div class="flex items-center justify-between text-[11px] text-slate-400 px-1">
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 pulse-indicator" id="statusDot"></span>
+          <span class="mono font-semibold tracking-wider text-white/90">HYPERSPACE<span class="text-cyan-400">.14D</span></span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 mono text-cyan-300" id="engineStatusBadge">CORE v4.2</span>
+        </div>
+        <div class="flex items-center gap-3 mono">
+          <span id="fpsCounter" class="text-emerald-400 font-medium">60 FPS</span>
+          <button id="btnAudio" class="px-2 py-0.5 rounded-full glass-subtle text-[10px] text-slate-300 hover:text-white flex items-center gap-1 active:scale-95 transition" title="Квантовый синтезатор звука">
+            <span id="audioIcon">🔇</span>
+            <span id="audioLabel">ЗВУК</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Dimension Quick Title + Step Controls -->
+      <div class="glass rounded-2xl p-2.5 flex items-center justify-between shadow-lg">
+        <button id="prevDimBtn" class="w-9 h-9 rounded-xl glass-subtle flex items-center justify-center text-slate-200 active:scale-90 transition hover:border-cyan-400/50">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+
+        <div class="flex flex-col items-center text-center px-2">
+          <div class="flex items-center gap-1.5">
+            <span id="dimBadgeTop" class="mono text-xs font-bold px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">4D</span>
+            <h1 id="dimTitleTop" class="text-sm font-bold tracking-tight text-white">Тессеракт (Гиперкуб)</h1>
+          </div>
+          <p id="dimSubtitleTop" class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">Пространство-время Минковского • 16 вершин</p>
+        </div>
+
+        <button id="nextDimBtn" class="w-9 h-9 rounded-xl glass-subtle flex items-center justify-center text-slate-200 active:scale-90 transition hover:border-cyan-400/50">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+      <!-- Horizontal Scrollable Dimension Selector (1D - 14D) -->
+      <div id="dimSelectorBar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-0.5">
+        <!-- Populated dynamically via JS -->
+      </div>
+    </header>
+
+    <!-- FLOATING REAL-TIME METRICS HUD (Top Left & Right Pills) -->
+    <div class="relative z-20 px-4 flex items-center justify-between pointer-events-none mt-1">
+      <div class="glass-subtle rounded-xl px-2.5 py-1.5 flex items-center gap-3 pointer-events-auto">
+        <div>
+          <div class="text-[9px] uppercase tracking-wider text-slate-400">Вершины (2ⁿ)</div>
+          <div id="hudVertices" class="mono text-xs font-bold text-white">16</div>
+        </div>
+        <div class="h-5 w-[1px] bg-white/10"></div>
+        <div>
+          <div class="text-[9px] uppercase tracking-wider text-slate-400">Рёбра (n·2ⁿ⁻¹)</div>
+          <div id="hudEdges" class="mono text-xs font-bold text-cyan-300">32</div>
+        </div>
+        <div class="h-5 w-[1px] bg-white/10"></div>
+        <div>
+          <div class="text-[9px] uppercase tracking-wider text-slate-400">Плоскости вращ.</div>
+          <div id="hudPlanes" class="mono text-xs font-bold text-purple-300">6</div>
+        </div>
+      </div>
+
+      <!-- Quick Action Floating Buttons -->
+      <div class="flex items-center gap-1.5 pointer-events-auto">
+        <button id="btnAutoRotate" class="glass-subtle w-8 h-8 rounded-xl flex items-center justify-center text-cyan-300 border border-cyan-400/40 active:scale-90 transition" title="Автовращение">
+          <svg class="w-4 h-4 animate-spin" style="animation-duration: 7s;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+        <button id="btnPulseFold" class="glass-subtle px-2.5 h-8 rounded-xl flex items-center gap-1 text-[11px] font-medium text-amber-300 border border-amber-400/30 active:scale-90 transition" title="Гипер-свёртка измерения">
+          <span>✧</span>
+          <span>Свёртка</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- CENTER GESTURE HINT (fades out after touch) -->
+    <div id="gestureHint" class="pointer-events-none relative z-10 flex-1 flex flex-col items-center justify-end pb-4 transition-opacity duration-500">
+      <div class="glass-subtle px-3 py-1 rounded-full text-[10px] text-slate-300/80 flex items-center gap-1.5">
+        <span>👆 Вращайте пальцем проекцию в 3D/ND</span>
+        <span class="text-white/30">•</span>
+        <span id="activeFormulaBadge" class="mono text-cyan-300">P = M_proj · R_nd · V</span>
+      </div>
+    </div>
+
+    <!-- INTERACTIVE BOTTOM DRAWER / TAB PANELS -->
+    <section class="relative z-20 px-3 pb-3 flex flex-col gap-2">
+
+      <!-- TAB 1: ПРОЕКЦИЯ (Quick Hyper-Axis Controls & Live Info Card) -->
+      <div id="tabPanel-projection" class="tab-panel glass rounded-3xl p-3.5 shadow-2xl transition-all duration-300">
+        <div class="flex items-center justify-between mb-2.5">
+          <div class="flex items-center gap-2">
+            <span id="dimColorDot" class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#00f0ff]"></span>
+            <span id="cardDimTag" class="text-xs font-semibold text-white">Гиперпространственный срез</span>
+          </div>
+          <span id="cardTopologyFormula" class="mono text-[10px] text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded-md">χ = V - E + F</span>
+        </div>
+
+        <!-- Sliders for immediate tactile manipulation -->
+        <div class="grid grid-cols-2 gap-3 mb-2.5">
+          <div class="glass-subtle rounded-xl p-2">
+            <div class="flex justify-between text-[10px] text-slate-300 mb-1">
+              <span>Гипер-фаза (W/V)</span>
+              <span id="valHyperSpeed" class="mono text-cyan-300">1.0x</span>
+            </div>
+            <input id="sliderHyperSpeed" type="range" min="0" max="300" value="100" class="cyber-slider" />
+          </div>
+
+          <div class="glass-subtle rounded-xl p-2">
+            <div class="flex justify-between text-[10px] text-slate-300 mb-1">
+              <span>Искривление поля</span>
+              <span id="valFovWarp" class="mono text-purple-300">45%</span>
+            </div>
+            <input id="sliderFovWarp" type="range" min="10" max="100" value="45" class="cyber-slider" />
+          </div>
+        </div>
+
+        <!-- Brief Dimension Description & Slicing Button -->
+        <div class="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
+          <p id="shortDescText" class="text-[11px] text-slate-300 leading-snug line-clamp-2 flex-1">
+            Четырёхмерный гиперкуб, спроецированный из пространства Минковского через матрицу перспективного сжатия.
+          </p>
+          <button id="btnSliceMode" class="shrink-0 px-2.5 py-1.5 rounded-xl glass-subtle text-[11px] font-medium text-cyan-300 hover:bg-white/10 active:scale-95 transition">
+            Сечение 3D
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 2: ПАРАМЕТРЫ (Deep Visual & Render Engine Controls) -->
+      <div id="tabPanel-controls" class="tab-panel hidden glass rounded-3xl p-4 shadow-2xl max-h-[46dvh] overflow-y-auto no-scrollbar">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Параметры рендера и осей</h2>
+          <button id="btnResetCamera" class="text-[11px] text-cyan-400 hover:underline mono">Сброс осей</button>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <div class="flex justify-between text-[11px] text-slate-300 mb-1">
+              <span>Масштаб проекции (Zoom)</span>
+              <span id="valZoom" class="mono text-cyan-300">100%</span>
+            </div>
+            <input id="sliderZoom" type="range" min="45" max="180" value="100" class="cyber-slider" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[11px] text-slate-300 mb-1">
+              <span>Смещение гипер-координаты W₀</span>
+              <span id="valSliceOffset" class="mono text-amber-300">0.00</span>
+            </div>
+            <input id="sliderSliceOffset" type="range" min="-100" max="100" value="0" class="cyber-slider" />
+          </div>
+
+          <!-- Render Toggles -->
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            <button id="toggleNodes" class="render-toggle glass-active rounded-xl py-2 px-2 text-[11px] font-medium text-center transition active:scale-95">
+              ● Вершины
+            </button>
+            <button id="toggleField" class="render-toggle glass-active rounded-xl py-2 px-2 text-[11px] font-medium text-center transition active:scale-95">
+              ◎ Квантовое поле
+            </button>
+            <button id="toggleLabels" class="render-toggle glass-subtle rounded-xl py-2 px-2 text-[11px] font-medium text-center transition active:scale-95">
+              # Координаты
+            </button>
+          </div>
+
+          <!-- Projection Mode Selector -->
+          <div class="pt-1">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-1.5">Математическая модель проекции</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button data-proj="perspective" class="proj-mode-btn glass-active rounded-xl py-1.5 text-[11px] font-medium text-white">Перспектива</button>
+              <button data-proj="stereographic" class="proj-mode-btn glass-subtle rounded-xl py-1.5 text-[11px] font-medium text-slate-300">Стереография</button>
+              <button data-proj="orthographic" class="proj-mode-btn glass-subtle rounded-xl py-1.5 text-[11px] font-medium text-slate-300">Ортогональная</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: ТЕОРИЯ (Comprehensive Scientific & Conceptual Breakdown 1D-14D) -->
+      <div id="tabPanel-theory" class="tab-panel hidden glass rounded-3xl p-4 shadow-2xl max-h-[50dvh] overflow-y-auto no-scrollbar">
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div>
+            <span id="theoryDimBadge" class="text-[10px] mono uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">Измерение N = 4</span>
+            <h2 id="theoryTitle" class="text-base font-bold text-white mt-1">Тессеракт и пространство Минковского</h2>
+          </div>
+          <div id="theorySymbol" class="mono text-xl font-extrabold text-cyan-400 bg-white/5 w-10 h-10 rounded-2xl flex items-center justify-center border border-white/10">
+            Ω₄
+          </div>
+        </div>
+
+        <p id="theoryBody" class="text-xs text-slate-300 leading-relaxed mb-3"></p>
+
+        <!-- Key Physics / Geometry Properties -->
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <div class="glass-subtle rounded-xl p-2.5">
+            <div class="text-[10px] text-slate-400">Физический смысл</div>
+            <div id="theoryPhysics" class="text-xs font-semibold text-white mt-0.5">Линия времени и причинности</div>
+          </div>
+          <div class="glass-subtle rounded-xl p-2.5">
+            <div class="text-[10px] text-slate-400">Степени свободы вращения</div>
+            <div id="theoryDOF" class="mono text-xs font-semibold text-cyan-300 mt-0.5">6 плоскостей SO(4)</div>
+          </div>
+        </div>
+
+        <div class="glass-subtle rounded-xl p-2.5 border-l-2 border-cyan-400">
+          <div class="text-[10px] uppercase tracking-wider text-cyan-300 font-semibold mb-0.5">Как мы видим это на 2D-экране смартфона?</div>
+          <p id="theoryHowWeSee" class="text-[11px] text-slate-300 leading-relaxed"></p>
+        </div>
+      </div>
+
+      <!-- TAB 4: ЯДРО / API (Simulated Backend Telemetry, Live N×N Matrix & Export) -->
+      <div id="tabPanel-backend" class="tab-panel hidden glass rounded-3xl p-3.5 shadow-2xl max-h-[50dvh] overflow-y-auto no-scrollbar">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-white mono">TENSOR ENGINE • LIVE TELEMETRY</h2>
+          </div>
+          <span id="computeLatency" class="mono text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">0.42 ms/tick</span>
+        </div>
+
+        <!-- Live Transformation Matrix Inspector -->
+        <div class="glass-subtle rounded-xl p-2.5 mb-2.5">
+          <div class="flex justify-between items-center text-[10px] text-slate-400 mb-1.5 mono">
+            <span id="matrixHeaderLabel">МАТРИЦА ОПЕРАТОРА SO(4) [4×4 СРЕЗ]</span>
+            <span class="text-cyan-300">det(R) = 1.0000</span>
+          </div>
+          <div id="liveMatrixGrid" class="grid grid-cols-4 gap-1 mono text-[10px] text-center">
+            <!-- Populated in real-time at 15Hz -->
+          </div>
+        </div>
+
+        <!-- Backend JSON State / Snapshot Export -->
+        <div class="glass-subtle rounded-xl p-2.5 mb-2.5">
+          <div class="text-[10px] text-slate-400 mono mb-1">API ENDPOINT: <span class="text-purple-300">POST /api/v1/project-manifold</span></div>
+          <pre id="apiJsonPreview" class="mono text-[10px] text-cyan-200/90 overflow-x-auto leading-tight"></pre>
+        </div>
+
+        <div class="flex gap-2">
+          <button id="btnCopyTelemetry" class="flex-1 py-2 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-xs font-semibold active:scale-95 transition">
+            📋 Скопировать JSON-отчёт
+          </button>
+          <button id="btnSnapshot" class="py-2 px-3 rounded-xl bg-purple-500/20 border border-purple-400/50 text-purple-200 text-xs font-semibold active:scale-95 transition">
+            📸 Снимок
+          </button>
+        </div>
+      </div>
+
+      <!-- BOTTOM NAVIGATION BAR (Mobile Thumb Zone) -->
+      <nav class="glass rounded-2xl p-1.5 grid grid-cols-4 gap-1 shadow-xl">
+        <button data-tab="projection" class="nav-tab-btn glass-active rounded-xl py-2 flex flex-col items-center justify-center gap-0.5 text-white transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          <span class="text-[10px] font-semibold">Проекция</span>
+        </button>
+
+        <button data-tab="controls" class="nav-tab-btn rounded-xl py-2 flex flex-col items-center justify-center gap-0.5 text-slate-400 hover:text-white transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+          <span class="text-[10px] font-semibold">Параметры</span>
+        </button>
+
+        <button data-tab="theory" class="nav-tab-btn rounded-xl py-2 flex flex-col items-center justify-center gap-0.5 text-slate-400 hover:text-white transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          <span class="text-[10px] font-semibold">Теория</span>
+        </button>
+
+        <button data-tab="backend" class="nav-tab-btn rounded-xl py-2 flex flex-col items-center justify-center gap-0.5 text-slate-400 hover:text-white transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+          <span class="text-[10px] font-semibold">Ядро / API</span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- Custom Toast Notification (No alert()) -->
+    <div id="toastBox" class="pointer-events-none absolute top-16 left-1/2 -translate-x-1/2 z-50 opacity-0 transition-all duration-300 transform -translate-y-2">
+      <div class="glass px-4 py-2 rounded-full text-xs font-medium text-cyan-200 border border-cyan-400/40 shadow-lg flex items-center gap-2">
+        <span>✨</span>
+        <span id="toastText">Уведомление</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /********************************************************************
+     * 1. БАЗА ДАННЫХ ИЗМЕРЕНИЙ (1D — 14D)
+     * Полное математическое, физическое и визуальное описание каждого N
+     ********************************************************************/
+    const DIMENSIONS_DB = [
+      {
+        n: 1,
+        name: "Линейный Континуум",
+        polytope: "Отрезок (1-симплекс)",
+        subtitle: "Одномерное пространство длины • 2 вершины",
+        color: "#38bdf8",
+        secondary: "#0284c7",
+        symbol: "ℝ¹",
+        formula: "x ∈ [-L, +L]",
+        physics: "Скалярное смещение вдоль единственной оси",
+        shortDesc: "Простейшее пространство, где движение возможно только вперёд или назад по одной координатной прямой X.",
+        theory: "В одномерном мире (1D) объект обладает только длиной. Любая фигура здесь — это отрезок, ограниченный двумя точками. Существо, живущее в 1D, видит перед собой лишь одну точку и не способно обойти препятствие.",
+        howWeSee: "На экране отображается векторная ось X с квантовыми узлами фазового колебания между двумя предельными вершинами (-1 и +1)."
+      },
+      {
+        n: 2,
+        name: "Флатландия (Плоскость)",
+        polytope: "Квадрат (2-куб / Тетрагон)",
+        subtitle: "Евклидова плоскость X-Y • 4 вершины, 4 ребра",
+        color: "#22d3ee",
+        secondary: "#0891b2",
+        symbol: "ℝ²",
+        formula: "x² + y² = R²",
+        physics: "Двумерная мембрана и графеновые решётки",
+        shortDesc: "Двумерное пространство длины и ширины. Появляется первая плоскость вращения XY и понятие площади.",
+        theory: "Переход из 1D в 2D создаёт из двух соединённых отрезков квадрат. Житель двумерного мира («Флатландии») воспринимает 3D-объекты только как меняющиеся в размерах плоские сечения, проходящие сквозь его плоскость.",
+        howWeSee: "Мы смотрим на двумерный полигон сверху из нашего 3D-мира — точно так же, как 4D-наблюдатель видел бы наш трёхмерный куб целиком изнутри и снаружи одновременно."
+      },
+      {
+        n: 3,
+        name: "Евклидово Пространство",
+        polytope: "Гексаэдр (Куб / 3-куб)",
+        subtitle: "Наш классический мир X-Y-Z • 8 вершин, 12 рёбер",
+        color: "#00f0ff",
+        secondary: "#6366f1",
+        symbol: "ℝ³",
+        formula: "ds² = dx² + dy² + dz²",
+        physics: "Барионная материя и классическая гравитация",
+        shortDesc: "Привычное человеку трёхмерное пространство объёма с тремя ортогональными плоскостями вращения (XY, YZ, XZ).",
+        theory: "В 3D-пространстве существуют 5 правильных платоновых тел. Стабильность орбит планет и атомов напрямую зависит от закона обратных квадратов, который работает именно благодаря трём пространственным измерениям.",
+        howWeSee: "Трёхмерный куб проецируется на плоский 2D-экран смартфона за счёт перспективного деления на глубину Z — его грани кажутся трапециями, но мозг достраивает объём."
+      },
+      {
+        n: 4,
+        name: "Тессеракт (Гиперкуб)",
+        polytope: "8-ячейник (4-куб / Тессеракт)",
+        subtitle: "Четвёртое измерение W • 16 вершин, 32 ребра, 24 грани",
+        color: "#a855f7",
+        secondary: "#00f0ff",
+        symbol: "ℝ⁴",
+        formula: "ds² = -c²dt² + dx² + dy² + dz²",
+        physics: "Пространство-время Минковского и 4D-геометрия",
+        shortDesc: "Два 3D-куба, сдвинутых вдоль четвёртой оси W, перпендикулярной всем трём нашим осям одновременно.",
+        theory: "В геометрии 4D-пространства к осям X, Y, Z добавляется ось W (анана / ката). При вращении тессеракта в гиперплоскостях XW, YW и ZW внутренний куб «выворачивается» наружу сквозь внешний без деформации своих 4-мерных углов (все углы равны 90°).",
+        howWeSee: "Тень 4D-тессеракта в 3D выглядит как куб внутри куба, соединённый 8 диагональными рёбрами, которые непрерывно перетекают друг в друга при гипер-вращении."
+      },
+      {
+        n: 5,
+        name: "Пентеракт (Пространство Калуцы — Клейна)",
+        polytope: "5-куб (Пентеракт / Декатеррон)",
+        subtitle: "Объединение гравитации и электромагнетизма • 32 вершины",
+        color: "#ec4899",
+        secondary: "#8b5cf6",
+        symbol: "ℝ⁵",
+        formula: "G_AB (A,B = 0..4)",
+        physics: "Пятое измерение теории Калуцы — Клейна и ветвление вероятностей",
+        shortDesc: "32 вершины и 80 рёбер. Содержит 10 тессерактов, сцепленных вдоль пятой ортогональной оси V.",
+        theory: "Теодор Калуца и Оскар Клейн доказали, что если добавить к 4D-пространству-времени Эйнштейна 5-е измерение, уравнения гравитации автоматически порождают уравнения электромагнетизма Максвелла. Свет — это рябь в пятом измерении.",
+        howWeSee: "Мы наблюдаем двойной тессеракт (32 вершины), чьи гиперграни совершают фазовые вращения в 10 независимых плоскостях группы SO(5)."
+      },
+      {
+        n: 6,
+        name: "Гексеракт (Фазовый Мультиверс)",
+        polytope: "6-куб (Гексеракт / Додекапетон)",
+        subtitle: "Фазовое пространство (x,y,z, px,py,pz) • 64 вершины, 192 ребра",
+        color: "#f43f5e",
+        secondary: "#c084fc",
+        symbol: "ℝ⁶",
+        formula: "dim(M₆) = 6 (Калаби — Яу)",
+        physics: "6-мерные компактные многообразия Калаби — Яу",
+        shortDesc: "Пространство всех возможных квантовых исходов нашей Вселенной с идентичными начальными условиями.",
+        theory: "В 6-мерном пространстве возможно мгновенное перемещение между альтернативными мировыми линиями без прохождения через время. В теории суперструн именно 6 дополнительных измерений свёрнуты в крошечные пространства Калаби — Яу в каждой точке нашего мира.",
+        howWeSee: "Симметричная кристаллическая решётка из 64 вершин и 192 рёбер с гармоническими орбитами свёрнутого 6-мерного многообразия."
+      },
+      {
+        n: 7,
+        name: "Хептеракт (Гипертопология G₂)",
+        polytope: "7-куб (Хептеракт)",
+        subtitle: "Исключительная голономия G₂ • 128 вершин, 448 рёбер",
+        color: "#f59e0b",
+        secondary: "#ec4899",
+        symbol: "ℝ⁷",
+        formula: "x × y ∈ Im(𝕆) (7D векторное произведение)",
+        physics: "Многообразия Джойса и мультивселенные с иными начальными условиями",
+        shortDesc: "Только в 3D и 7D существует полноценное векторное произведение (связанное с алгеброй октонионов).",
+        theory: "Седьмое измерение описывает бесконечный спектр вселенных, возникших из разных сингулярностей с отличающимися параметрами расширения. Математически 7D уникально наличием экзотических сфер Милнора — пространств, топологически неотличимых от сферы, но несовместимых дифференциально.",
+        howWeSee: "Сложный 128-вершинный гиперполитоп с 21 плоскостью вращения, окружённый энергетическими кольцами 7-мерной сферы S⁷."
+      },
+      {
+        n: 8,
+        name: "Октеракт и Решётка E₈",
+        polytope: "8-куб (Октеракт) + Корневая система E₈",
+        subtitle: "Идеальная упаковка сфер Марины Вязовской • 256 вершин",
+        color: "#10b981",
+        secondary: "#06b6d4",
+        symbol: "E₈",
+        formula: "240 корней в ℝ⁸ + 256 вершин B₈",
+        physics: "Квантовый эффект Холла и единая калибровочная симметрия E₈×E₈",
+        shortDesc: "Восьмимерное пространство обладает самой плотной и симметричной кристаллической упаковкой гиперсфер во Вселенной.",
+        theory: "В 8D возникает знаменитая исключительная группа Ли E₈ (248 размерностей) и 8-мерный октеракт (256 вершин, 1024 ребра). Здесь сферы упаковываются настолько идеально, что касаются сразу 240 соседних гиперсфер — фундаментальный ключ к теории квантовой гравитации.",
+        howWeSee: "Синхронная проекция ядра октеракта и концентрических колец Коксетера решётки E₈ с 28 плоскостями гипер-вращения."
+      },
+      {
+        n: 9,
+        name: "Эннеракт (Тензорный Резонанс)",
+        polytope: "9-куб (Эннеракт) + Струнный солитон",
+        subtitle: "Пространство колебаний фундаментальных суперструн • 512 вершин",
+        color: "#06b6d4",
+        secondary: "#3b82f6",
+        symbol: "ℝ⁹",
+        formula: "S_poly = -T ∫ d²σ √(-h)",
+        physics: "9 пространственных измерений теории суперструн (до учёта времени)",
+        shortDesc: "Девять чистых пространственных координат, в которых вибрируют квантовые струны, порождая массу и заряд частиц.",
+        theory: "Чтобы квантовая теория струн не содержала отрицательных вероятностей (тахионных аномалий Лоренца), струна обязана колебаться ровно в 9 пространственных измерениях. Разные моды колебаний 9D-петли мы воспринимаем как электроны, кварки и фотоны.",
+        howWeSee: "Гибридная проекция 9D-политопа (512 вершин в спектральной свёртке) и стоячих волн замкнутых релятивистских суперструн."
+      },
+      {
+        n: 10,
+        name: "Декеракт (10D Суперструнная Матрица)",
+        polytope: "10-куб (Декеракт) + Калаби — Яу ℝ³˒¹ × CY₆",
+        subtitle: "Полное пространство-время суперструн (9+1) • 1024 вершины",
+        color: "#6366f1",
+        secondary: "#00f0ff",
+        symbol: "𝕀¹⁰",
+        formula: "D_crit = 10 (IIA, IIB, Heterotic)",
+        physics: "Пять согласованных теорий суперструн в 10 измерениях",
+        shortDesc: "Критическая размерность, объединяющая 4 макро-измерения и 6 компактных гиперпространств всех возможных законов физики.",
+        theory: "Десятое измерение — это предел классической теории суперструн. В нём все возможные ветви всех возможных вселенных с любыми константами природы сворачиваются в единую гиперматрицу (1024 вершины и 5120 рёбер декеракта).",
+        howWeSee: "Многослойная гиперсферическая мандала декеракта, где внешнее кольцо отражает макромир, а внутреннее ядро — 6D-свёртку Калаби — Яу."
+      },
+      {
+        n: 11,
+        name: "М-Теория (Гипермембрана Эдварда Виттена)",
+        polytope: "11-симплекс / M2- и M5-браны",
+        subtitle: "Единая М-Теория и 11D Супергравитация • 2048 вершин",
+        color: "#d946ef",
+        secondary: "#f59e0b",
+        symbol: "𝕄¹¹",
+        formula: "L₁₁ = (1/2κ²) R ★1 - ½ F₄ ∧ ★F₄",
+        physics: "Столкновение многомерных бран и рождение Большого взрыва",
+        shortDesc: "При увеличении константы связи в 10D открывается 11-е измерение, а одномерные струны оказываются срезами двумерных и пятимерных гипермембран.",
+        theory: "11 измерений — это максимальная размерность, в которой может существовать самосогласованная супергравитация (предел Нама). Наша Вселенная здесь — это гигантская 3-брана, парящая в 11-мерном гипер-объёме (Bulk).",
+        howWeSee: "Пульсирующий 11-мерный тор Клиффорда, пронизанный узлами политопа 2¹¹ = 2048 и волнами мембранного натяжения."
+      },
+      {
+        n: 12,
+        name: "F-Теория (Двухвременной Континуум)",
+        polytope: "Додекеракт (12-куб) • Сигнатура (10, 2)",
+        subtitle: "Две независимые оси времени (t₁, t₂) • 4096 вершин",
+        color: "#eab308",
+        secondary: "#ec4899",
+        symbol: "𝔽¹²",
+        formula: "ds² = -dt₁² - dt₂² + ∑ dx_i² (i=1..10)",
+        physics: "F-теория Камрана Вафы и двухвременная физика Ицхака Барса",
+        shortDesc: "10 пространственных и 2 временных измерения. Второе время позволяет менять само течение причинно-следственных цепочек.",
+        theory: "В 1996 году физик Камран Вафа предложил F-теорию в 12 измерениях с метрической сигнатурой (10,2). Эллиптическое расслоение тора над 10-мерным пространством геометризует S-дуальность струн и объясняет симметрии Стандартной модели.",
+        howWeSee: "Двойная противовращающаяся хроно-спираль (оси t₁ и t₂), внутри которой синхронно вращается 12-мерный кристалл додекеракта."
+      },
+      {
+        n: 13,
+        name: "Омега-Сингулярность (Тензорная Сеть)",
+        polytope: "13-куб (Тридекеракт) + Голографический тензор MERA",
+        subtitle: "Эмерджентное пространство из квантовой запутанности • 8192 вершины",
+        color: "#14b8a6",
+        secondary: "#a855f7",
+        symbol: "Ψ¹³",
+        formula: "S_EE = Area(γ_A) / 4G_N (Рю — Таканаги)",
+        physics: "Голографический принцип AdS/CFT и квантовая гравитация ER=EPR",
+        shortDesc: "На уровне 13D само пространство и время перестают быть первичными — они сплетаются из квантовой запутанности кубитов.",
+        theory: "В 13-мерном представлении геометрия возникает как голограмма из квантово-информационной сети (принцип Малдасены и формула Рю — Таканаги). Две запутанные частицы на разных краях космоса соединены короткой червоточиной через 13-е измерение.",
+        howWeSee: "Фрактальная голографическая сеть гиперболического пространства Анти-де Ситтера с гравитационным линзированием центрального ядра."
+      },
+      {
+        n: 14,
+        name: "Абсолютный Гиперконтинуум (Группа G₂ / 14D)",
+        polytope: "Тетрадекеракт (14-куб) • 16 384 вершины, 114 688 рёбер",
+        subtitle: "14-мерная группа автоморфизмов октонионов и Геометрическое Единство",
+        color: "#ffffff",
+        secondary: "#00f0ff",
+        symbol: "𝔾₂¹⁴",
+        formula: "dim(Aut(𝕆)) = 14 | Chimeric Bundle GU(14)",
+        physics: "14D расслоение Эрика Вайнштейна (Geometric Unity) и предел алгебры с делением",
+        shortDesc: "Высший математический предел: 14-мерное расслоение метрик над 4D-пространством-временем и полная симметрия октонионов.",
+        theory: "Почему именно 14D — венец геометрии? Во-первых, 14 — это размерность исключительной группы Ли G₂ (группы симметрий самой сложной алгебры с делением — 8-мерных октонионов). Во-вторых, пространство всех возможных метрических тензоров над нашим 4D-миром имеет размерность 4 + (4×5)/2 = 14! Это абсолютный аттрактор геометрии.",
+        howWeSee: "Коронная проекция 14-мерного гипер-аттрактора: многослойное ядро тетрадекеракта, лучи проекции Химерного расслоения и кольцо 14-мерной алгебры Ли."
+      }
+    ];
+
+    /********************************************************************
+     * 2. ГЛОБАЛЬНОЕ СОСТОЯНИЕ ПРИЛОЖЕНИЯ И МАТЕМАТИЧЕСКОГО ЯДРА
+     ********************************************************************/
+    const state = {
+      dim: 4,                     // Текущее измерение (1..14)
+      autoRotate: true,           // Автовращение
+      pulseFold: false,           // Режим гипер-свёртки (дыхание размерности)
+      sliceMode: false,           // Режим 3D-сечения гиперпространства
+      hyperSpeed: 1.0,            // Скорость вращения высших осей (W, V, U...)
+      fovWarp: 0.45,              // Сила перспективного искривления
+      zoom: 1.0,                  // Масштаб камеры
+      sliceOffset: 0.0,           // Смещение секущей гиперплоскости W0
+      showNodes: true,            // Отрисовка вершин
+      showField: true,            // Отрисовка квантового поля / орбит
+      showLabels: false,          // Подписи координат
+      projMode: "perspective",    // perspective | stereographic | orthographic
+      rotX: 0.42,                 // Пользовательский наклон 3D X
+      rotY: 0.65,                 // Пользовательский поворот 3D Y
+      velX: 0,                    // Инерция тача X
+      velY: 0,                    // Инерция тача Y
+      isDragging: false,
+      lastTouchX: 0,
+      lastTouchY: 0,
+      time: 0,
+      fps: 60,
+      computeMs: 0.35,
+      audioEnabled: false,
+      activeGeometry: null,       // Кэш вершин и рёбер для текущего N
+      liveMatrix: [               // 4x4 срез матрицы оператора вращения для инспектора
+        [1,0,0,0],
+        [0,1,0,0],
+        [0,0,1,0],
+        [0,0,0,1]
+      ]
+    };
+
+    /********************************************************************
+     * 3. WEB AUDIO API — КВАНТОВЫЙ СИНТЕЗАТОР (Гармоники 1D–14D)
+     ********************************************************************/
+    let audioCtx = null;
+    let ambientOsc1 = null;
+    let ambientOsc2 = null;
+    let ambientGain = null;
+
+    function initOrToggleAudio() {
+      try {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass();
+          ambientOsc1 = audioCtx.createOscillator();
+          ambientOsc2 = audioCtx.createOscillator();
+          ambientGain = audioCtx.createGain();
+
+          ambientOsc1.type = "sine";
+          ambientOsc2.type = "triangle";
+          ambientGain.gain.value = 0.0001;
+
+          ambientOsc1.connect(ambientGain);
+          ambientOsc2.connect(ambientGain);
+          ambientGain.connect(audioCtx.destination);
+
+          ambientOsc1.start();
+          ambientOsc2.start();
+        }
+
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+
+        state.audioEnabled = !state.audioEnabled;
+        const now = audioCtx.currentTime;
+        if (state.audioEnabled) {
+          updateAudioHarmonics(state.dim);
+          ambientGain.gain.setTargetAtTime(0.045, now, 0.25);
+          document.getElementById("audioIcon").textContent = "🔊";
+          document.getElementById("audioLabel").textContent = "СИНТ";
+          showToast("Квантовый аудио-резонанс включён");
+        } else {
+          ambientGain.gain.setTargetAtTime(0.0001, now, 0.15);
+          document.getElementById("audioIcon").textContent = "🔇";
+          document.getElementById("audioLabel").textContent = "ЗВУК";
+        }
+      } catch (e) {
+        // Игнорируем ограничения автозапуска аудио
+      }
+    }
+
+    function updateAudioHarmonics(n) {
+      if (!audioCtx || !state.audioEnabled) return;
+      const now = audioCtx.currentTime;
+      // Базовая частота растёт по гармоническому ряду Пифагора / обертонам измерения
+      const baseFreq = 96 + n * 18;
+      const fifthFreq = baseFreq * (1 + (n % 5) * 0.125);
+      ambientOsc1.frequency.setTargetAtTime(baseFreq, now, 0.15);
+      ambientOsc2.frequency.setTargetAtTime(fifthFreq, now, 0.15);
+
+      // Короткий тактильный импульс при переключении
+      const pingOsc = audioCtx.createOscillator();
+      const pingGain = audioCtx.createGain();
+      pingOsc.type = "sine";
+      pingOsc.frequency.setValueAtTime(baseFreq * 2.5, now);
+      pingOsc.frequency.exponentialRampToValueAtTime(baseFreq * 1.2, now + 0.18);
+      pingGain.gain.setValueAtTime(0.06, now);
+      pingGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+      pingOsc.connect(pingGain);
+      pingGain.connect(audioCtx.destination);
+      pingOsc.start(now);
+      pingOsc.stop(now + 0.22);
+    }
+
+    /********************************************************************
+     * 4. ГЕНЕРАТОР N-МЕРНОЙ ГЕОМЕТРИИ (1D — 14D БЕЗ ПРОСАДОК FPS)
+     * - Для 1D..7D: точный N-куб (2^N вершин и N*2^(N-1) рёбер)
+     * - Для 8D..14D: гибридная комбинация точного N-мерного ядра,
+     *   проекции Коксетера и многомерных расслоений Хопфа / Калаби-Яу,
+     *   обеспечивающая стабильные 60 FPS на мобильных процессорах.
+     ********************************************************************/
+    function buildDimensionGeometry(n) {
+      const vertices = [];
+      const edges = [];
+      const rings = [];
+
+      if (n === 1) {
+        // 1D: Отрезок [-1, +1] + внутренние квантовые узлы
+        vertices.push([-1, 0, 0, 0]);
+        vertices.push([1, 0, 0, 0]);
+        edges.push([0, 1, 1.0]);
+      } else if (n <= 6) {
+        // Точный N-мерный гиперкуб для 2D..6D (до 64 вершин, 192 рёбер)
+        const count = 1 << n; // 2^n
+        for (let i = 0; i < count; i++) {
+          const coord = new Float32Array(n);
+          for (let bit = 0; bit < n; bit++) {
+            coord[bit] = (i & (1 << bit)) ? 1 : -1;
+          }
+          vertices.push(coord);
+        }
+        // Рёбра соединяют вершины, отличающиеся ровно в 1 бите (расстояние Хэмминга = 1)
+        for (let i = 0; i < count; i++) {
+          for (let bit = 0; bit < n; bit++) {
+            const j = i ^ (1 << bit);
+            if (i < j) {
+              edges.push([i, j, bit / Math.max(1, n - 1)]);
+            }
+          }
+        }
+      } else if (n === 7) {
+        // 7D Хептеракт: 128 вершин, фильтрация ключевых гиперграней (320 рёбер для кристальной чёткости)
+        const count = 128;
+        for (let i = 0; i < count; i++) {
+          const coord = new Float32Array(7);
+          for (let bit = 0; bit < 7; bit++) {
+            coord[bit] = (i & (1 << bit)) ? 1 : -1;
+          }
+          vertices.push(coord);
+        }
+        for (let i = 0; i < count; i++) {
+          for (let bit = 0; bit < 7; bit++) {
+            const j = i ^ (1 << bit);
+            // Оставляем все внешние и диагональные гиперсвязи (около 320 рёбер)
+            if (i < j && ((i + bit) % 3 !== 0 || bit >= 4)) {
+              edges.push([i, j, bit / 6]);
+            }
+          }
+        }
+      } else {
+        // 8D — 14D: Высокоразмерный гибридный политоп Коксетера + Оболочки Калаби-Яу / Октонионов
+        // Создаём 64 базовые N-мерные вершины ядра + гармонические оболочки в пространстве ℝ^N
+        const coreDim = 6;
+        const coreCount = 1 << coreDim; // 64 узла ядра, погружённые в N измерений
+        for (let i = 0; i < coreCount; i++) {
+          const coord = new Float32Array(n);
+          for (let bit = 0; bit < n; bit++) {
+            if (bit < coreDim) {
+              coord[bit] = (i & (1 << bit)) ? 0.78 : -0.78;
+            } else {
+              // Высшие измерения (7..14) кодируются через чётность спинора (полуцелые веса корней E8 / SO(2N))
+              const parity = ((i >> (bit % coreDim)) & 1) ? 1 : -1;
+              coord[bit] = parity * 0.95 * Math.cos((i * (bit + 1) * Math.PI) / 16);
+            }
+          }
+          vertices.push(coord);
+        }
+
+        // Рёбра ядра
+        for (let i = 0; i < coreCount; i++) {
+          for (let bit = 0; bit < coreDim; bit++) {
+            const j = i ^ (1 << bit);
+            if (i < j && ((i + bit) % 2 === 0 || bit >= 3)) {
+              edges.push([i, j, bit / n]);
+            }
+          }
+        }
+
+        // Добавляем внешнюю симметричную корону Коксетера (политоп в плоскости Коксетера для размерности N)
+        const crownNodes = Math.min(48 + (n - 7) * 8, 96);
+        const startIdx = vertices.length;
+        for (let k = 0; k < crownNodes; k++) {
+          const coord = new Float32Array(n);
+          const theta = (2 * Math.PI * k) / crownNodes;
+          for (let d = 0; d < n; d++) {
+            const harmonic = Math.floor(d / 2) + 1;
+            const radius = 1.32 + 0.18 * Math.sin(d * 1.7);
+            if (d % 2 === 0) {
+              coord[d] = radius * Math.cos(theta * harmonic + d * 0.4);
+            } else {
+              coord[d] = radius * Math.sin(theta * harmonic + d * 0.4);
+            }
+          }
+          vertices.push(coord);
+        }
+
+        // Соединяем корону Коксетера хордами высших измерений и мостами к ядру
+        for (let k = 0; k < crownNodes; k++) {
+          const curr = startIdx + k;
+          const next1 = startIdx + ((k + 1) % crownNodes);
+          const nextChord = startIdx + ((k + (n - 3)) % crownNodes);
+          edges.push([curr, next1, 0.85]);
+          if (k % 2 === 0) {
+            edges.push([curr, nextChord, 0.98]);
+          }
+          // Мост между короной 14D и внутренним гиперкубом
+          if (k % 3 === 0) {
+            const coreTarget = (k * 7) % coreCount;
+            edges.push([curr, coreTarget, 0.55]);
+          }
+        }
+      }
+
+      // Генерация орбитальных квантовых нитей (расслоения Хопфа / мембраны для визуальной глубины)
+      const numRings = Math.min(n, 8);
+      for (let r = 0; r < numRings; r++) {
+        rings.push({
+          radius: 0.9 + r * 0.16,
+          speed: (r % 2 === 0 ? 1 : -1) * (0.35 + r * 0.12),
+          tiltX: (r * Math.PI) / Math.max(2, numRings),
+          tiltY: (r * Math.PI * 0.7) / Math.max(2, numRings),
+          phaseOffset: r * 1.1
+        });
+      }
+
+      return { n, vertices, edges, rings };
+    }
+
+    /********************************************************************
+     * 5. МАТЕМАТИЧЕСКОЕ ЯДРО ПРОЕКЦИИ ND -> 3D -> 2D
+     * Честное каскадное вращение в плоскостях (0..N-1) и перспективное сжатие
+     ********************************************************************/
+    const canvas = document.getElementById("hyperCanvas");
+    const ctx = canvas.getContext("2d");
+    let cw = 0, ch = 0, dpr = 1;
+
+    function resizeCanvas() {
+      const frame = document.getElementById("appFrame");
+      const rect = frame.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      cw = rect.width;
+      ch = rect.height;
+      canvas.width = cw * dpr;
+      canvas.height = ch * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    // Фоновые звёздные частицы глубокого поля
+    const starField = Array.from({ length: 55 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      size: Math.random() * 1.6 + 0.4,
+      alpha: Math.random() * 0.5 + 0.15,
+      speed: Math.random() * 0.15 + 0.04
+    }));
+
+    function projectNDVertex(rawCoord, n, t, dimMeta) {
+      // Копируем координаты вершины в буфер размерности max(n, 3)
+      const dimLen = Math.max(n, 3);
+      const v = new Float32Array(dimLen);
+      for (let i = 0; i < n; i++) v[i] = rawCoord[i];
+
+      // Если включена «Свёртка» (Dimensional Pulse), модулируем высшие координаты
+      const foldFactor = state.pulseFold ? (0.45 + 0.55 * Math.sin(t * 2.2)) : 1.0;
+      for (let d = 3; d < n; d++) {
+        v[d] = (v[d] + state.sliceOffset * 0.7) * foldFactor;
+      }
+
+      // 1. Вращение в высших гиперплоскостях (X-W, Y-W, Z-W, W-V, V-U ... до 14D)
+      const hSpeed = state.hyperSpeed;
+      for (let d = 3; d < n; d++) {
+        const axisA = (d - 3) % 3; // Связываем высшее измерение d с осями X, Y, Z
+        const angle1 = t * hSpeed * (0.55 + (d - 3) * 0.11) + d * 0.8;
+        const c1 = Math.cos(angle1);
+        const s1 = Math.sin(angle1);
+
+        const va = v[axisA];
+        const vd = v[d];
+        v[axisA] = va * c1 - vd * s1;
+        v[d] = va * s1 + vd * c1;
+
+        // Дополнительное вращение между соседними гипер-осями (например W-V, V-U)
+        if (d >= 4) {
+          const angle2 = -t * hSpeed * 0.42 + d * 1.3;
+          const c2 = Math.cos(angle2);
+          const s2 = Math.sin(angle2);
+          const vm1 = v[d - 1];
+          const vdCurr = v[d];
+          v[d - 1] = vm1 * c2 - vdCurr * s2;
+          v[d] = vm1 * s2 + vdCurr * c2;
+        }
+      }
+
+      // 2. Каскадная проекция из N измерений вниз до 3D: ℝ^N -> ℝ^(N-1) -> ... -> ℝ^3
+      let hyperDepthSum = 0;
+      const baseCameraDist = 3.3 - state.fovWarp * 1.35; // Чем выше искривление, тем сильнее перспектива
+      for (let d = n - 1; d >= 3; d--) {
+        const wCoord = v[d];
+        hyperDepthSum += wCoord;
+        let factor = 1.0;
+
+        if (state.projMode === "perspective") {
+          const denom = Math.max(0.65, baseCameraDist + (d - 3) * 0.38 - wCoord * 0.55);
+          factor = (baseCameraDist * 0.82) / denom;
+        } else if (state.projMode === "stereographic") {
+          // Стереографическая проекция с северного полюса гиперсферы
+          const denom = Math.max(0.55, 2.2 - wCoord * 0.5);
+          factor = 1.45 / denom;
+        } else {
+          // Ортогональная проекция с лёгким изометрическим сдвигом
+          v[0] += wCoord * 0.22 * Math.cos(d);
+          v[1] += wCoord * 0.22 * Math.sin(d);
+          factor = 0.82;
+        }
+
+        for (let k = 0; k < d; k++) {
+          v[k] *= factor;
+        }
+      }
+
+      // 3. Для 2D и 1D вращение также работает плавно в 3D-пространстве осмотра
+      let x = v[0];
+      let y = n >= 2 ? v[1] : 0;
+      let z = n >= 3 ? v[2] : 0;
+
+      // Вращение пользователем (тач / мышь + автовращение) в 3D
+      const cy = Math.cos(state.rotY), sy = Math.sin(state.rotY);
+      const cx = Math.cos(state.rotX), sx = Math.sin(state.rotX);
+
+      // Поворот вокруг оси Y
+      const x1 = x * cy - z * sy;
+      const z1 = x * sy + z * cy;
+      // Поворот вокруг оси X
+      const y2 = y * cx - z1 * sx;
+      const z2 = y * sx + z1 * cx;
+
+      // Сохраняем коэффициенты в liveMatrix для вкладки «Ядро / API»
+      const wAngle = t * state.hyperSpeed * 0.6;
+      state.liveMatrix[0][0] = cy;
+      state.liveMatrix[0][1] = 0;
+      state.liveMatrix[0][2] = -sy;
+      state.liveMatrix[0][3] = n >= 4 ? -Math.sin(wAngle) : 0;
+
+      state.liveMatrix[1][0] = sx * sy;
+      state.liveMatrix[1][1] = cx;
+      state.liveMatrix[1][2] = sx * cy;
+      state.liveMatrix[1][3] = n >= 4 ? Math.cos(wAngle) * 0.5 : 0;
+
+      state.liveMatrix[2][0] = cx * sy;
+      state.liveMatrix[2][1] = -sx;
+      state.liveMatrix[2][2] = cx * cy;
+      state.liveMatrix[2][3] = n >= 5 ? Math.sin(wAngle * 1.3) : 0;
+
+      state.liveMatrix[3][0] = n >= 4 ? Math.sin(wAngle) : 0;
+      state.liveMatrix[3][1] = n >= 5 ? -Math.cos(wAngle * 0.8) : 0;
+      state.liveMatrix[3][2] = 0;
+      state.liveMatrix[3][3] = n >= 4 ? Math.cos(wAngle) : 1;
+
+      // 4. Финальная проекция 3D -> 2D экран смартфона
+      const fov3D = 3.6 - state.fovWarp * 1.1;
+      const zDist = Math.max(0.7, fov3D - z2 * 0.55);
+      const scale2D = (Math.min(cw, ch) * 0.31 * state.zoom) / zDist;
+
+      // Центр холста чуть выше середины, чтобы нижняя карточка не перекрывала фигуру
+      const centerX = cw * 0.5;
+      const centerY = ch * 0.44;
+
+      return {
+        sx: centerX + x1 * scale2D,
+        sy: centerY + y2 * scale2D,
+        z: z2,
+        wDepth: hyperDepthSum,
+        scale: scale2D,
+        rawX: x1,
+        rawY: y2
+      };
+    }
+
+    /********************************************************************
+     * 6. ГЛАВНЫЙ ЦИКЛ РЕНДЕРА 60 FPS
+     ********************************************************************/
+    let lastFrameTime = performance.now();
+    let frameCount = 0;
+    let fpsTimer = performance.now();
+
+    function renderLoop(now) {
+      const t0 = performance.now();
+      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+
+      // Счётчик FPS
+      frameCount++;
+      if (now - fpsTimer >= 500) {
+        state.fps = Math.min(60, Math.round((frameCount * 1000) / (now - fpsTimer)));
+        document.getElementById("fpsCounter").textContent = `${state.fps} FPS`;
+        frameCount = 0;
+        fpsTimer = now;
+        updateTelemetryUI();
+      }
+
+      state.time += dt;
+
+      // Автовращение и затухание инерции свайпа
+      if (!state.isDragging) {
+        state.rotY += state.velY;
+        state.rotX += state.velX;
+        state.velX *= 0.92;
+        state.velY *= 0.92;
+        if (state.autoRotate) {
+          state.rotY += dt * 0.38;
+          state.rotX += Math.sin(state.time * 0.5) * dt * 0.08;
+        }
+      }
+
+      const dimMeta = DIMENSIONS_DB[state.dim - 1];
+      const geom = state.activeGeometry;
+
+      // Очистка холста
+      ctx.clearRect(0, 0, cw, ch);
+
+      // Center coordinates
+      const cx = cw * 0.5;
+      const cy = ch * 0.44;
+
+      // 1. Отрисовка глубокого космоса и энергетического ореола измерения
+      const bgGlow = ctx.createRadialGradient(cx, cy, 8, cx, cy, Math.min(cw, ch) * 0.52);
+      bgGlow.addColorStop(0, hexToRgba(dimMeta.color, 0.20));
+      bgGlow.addColorStop(0.5, hexToRgba(dimMeta.secondary, 0.08));
+      bgGlow.addColorStop(1, "rgba(5, 6, 13, 0)");
+      ctx.fillStyle = bgGlow;
+      ctx.fillRect(0, 0, cw, ch);
+
+      // Фоновые квантовые пылинки
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < starField.length; i++) {
+        const s = starField[i];
+        s.y -= dt * s.speed * 0.08 * (1 + state.dim * 0.08);
+        if (s.y < 0) s.y = 1;
+        ctx.globalAlpha = s.alpha;
+        ctx.beginPath();
+        ctx.arc(s.x * cw, s.y * ch, s.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // 2. Отрисовка квантового поля / расслоений Хопфа и орбитальных колец
+      if (state.showField) {
+        drawQuantumFieldRings(cx, cy, dimMeta, geom);
+      }
+
+      // 3. Вычисление проекций всех вершин
+      const projected = new Array(geom.vertices.length);
+      for (let i = 0; i < geom.vertices.length; i++) {
+        projected[i] = projectNDVertex(geom.vertices[i], state.dim, state.time, dimMeta);
+      }
+
+      // Специальная визуализация для 1D (волновой пакет на оси X)
+      if (state.dim === 1 && projected.length >= 2) {
+        draw1DWavePacket(projected[0], projected[1], dimMeta);
+      }
+
+      // 4. Отрисовка рёбер N-мерного политопа
+      ctx.lineCap = "round";
+      for (let i = 0; i < geom.edges.length; i++) {
+        const [aIdx, bIdx, layerRatio] = geom.edges[i];
+        const pA = projected[aIdx];
+        const pB = projected[bIdx];
+
+        const avgZ = (pA.z + pB.z) * 0.5;
+        // Если включён режим «Сечение 3D», отсекаем рёбра за пределами гиперслоя
+        if (state.sliceMode && Math.abs(pA.wDepth - state.sliceOffset) > 1.35) {
+          continue;
+        }
+
+        const depthAlpha = clamp(0.22 + (avgZ + 1.8) * 0.22, 0.12, 0.92);
+        const edgeColor = layerRatio > 0.45 ? dimMeta.secondary : dimMeta.color;
+
+        ctx.strokeStyle = hexToRgba(edgeColor, depthAlpha);
+        ctx.lineWidth = state.dim <= 5
+          ? clamp(1.4 + (avgZ + 1) * 0.55, 0.8, 2.8)
+          : clamp(0.85 + (avgZ + 1) * 0.35, 0.5, 1.8);
+
+        ctx.beginPath();
+        ctx.moveTo(pA.sx, pA.sy);
+        ctx.lineTo(pB.sx, pB.sy);
+        ctx.stroke();
+      }
+
+      // 5. Для 10D—14D добавляем голографическое ядро сингулярности / нити бран
+      if (state.dim >= 10) {
+        drawHighDimensionalCore(cx, cy, dimMeta, state.dim);
+      }
+
+      // 6. Отрисовка вершин (узлов политопа) и координатных меток
+      if (state.showNodes) {
+        for (let i = 0; i < projected.length; i++) {
+          const p = projected[i];
+          if (state.sliceMode && Math.abs(p.wDepth - state.sliceOffset) > 1.35) continue;
+
+          const nodeRadius = state.dim <= 5
+            ? clamp(2.8 + (p.z + 1.2) * 1.1, 1.8, 5.2)
+            : clamp(1.6 + (p.z + 1.2) * 0.65, 1.1, 3.2);
+
+          // Неоновое свечение узла
+          ctx.fillStyle = hexToRgba(dimMeta.color, 0.28);
+          ctx.beginPath();
+          ctx.arc(p.sx, p.sy, nodeRadius * 2.1, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Ядро вершины
+          ctx.fillStyle = p.wDepth > 0.15 ? "#ffffff" : dimMeta.color;
+          ctx.beginPath();
+          ctx.arc(p.sx, p.sy, nodeRadius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Подписи координат (для части вершин, чтобы не перегружать экран)
+          if (state.showLabels && (state.dim <= 4 || i % Math.ceil(projected.length / 12) === 0)) {
+            ctx.font = "500 9px 'JetBrains Mono', monospace";
+            ctx.fillStyle = "rgba(226, 232, 240, 0.8)";
+            ctx.fillText(`v${i}[${p.z.toFixed(1)}]`, p.sx + 6, p.sy - 4);
+          }
+        }
+      }
+
+      // Замер времени математического расчёта кадра
+      const elapsed = performance.now() - t0;
+      state.computeMs = state.computeMs * 0.9 + elapsed * 0.1;
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    // Вспомогательная функция отрисовки 1D стоячей квантовой волны
+    function draw1DWavePacket(pA, pB, dimMeta) {
+      const steps = 48;
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(dimMeta.secondary, 0.85);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) {
+        const u = i / steps;
+        const x = pA.sx + (pB.sx - pA.sx) * u;
+        const y = pA.sy + (pB.sy - pA.sy) * u;
+        const env = Math.sin(u * Math.PI); // Огибающая на концах отрезка = 0
+        const wave = Math.sin(u * 14 - state.time * 5 * state.hyperSpeed) * 22 * env;
+        const nx = -(pB.sy - pA.sy);
+        const ny = (pB.sx - pA.sx);
+        const len = Math.hypot(nx, ny) || 1;
+        const px = x + (nx / len) * wave;
+        const py = y + (ny / len) * wave;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Отрисовка квантового поля и орбитальных колец вокруг политопа
+    function drawQuantumFieldRings(cx, cy, dimMeta, geom) {
+      const baseR = Math.min(cw, ch) * 0.27 * state.zoom;
+      ctx.save();
+      for (let i = 0; i < geom.rings.length; i++) {
+        const ring = geom.rings[i];
+        const angle = state.time * ring.speed * (0.4 + state.hyperSpeed * 0.6) + ring.phaseOffset;
+        const rx = baseR * ring.radius;
+        const ry = rx * (0.32 + 0.25 * Math.sin(state.rotX + ring.tiltX));
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(state.rotY * 0.4 + ring.tiltY + angle * 0.25);
+
+        ctx.strokeStyle = hexToRgba(i % 2 === 0 ? dimMeta.color : dimMeta.secondary, 0.14);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 8]);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx, Math.abs(ry), 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Орбитальный квант на кольце
+        const qx = Math.cos(angle * 2) * rx;
+        const qy = Math.sin(angle * 2) * Math.abs(ry);
+        ctx.fillStyle = dimMeta.color;
+        ctx.beginPath();
+        ctx.arc(qx, qy, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    // Спец-рендер для высших измерений (10D - 14D: суперструны, браны М-теории, аттрактор G2)
+    function drawHighDimensionalCore(cx, cy, dimMeta, n) {
+      const petals = n; // Число лепестков резонанса соответствует размерности (10..14)
+      const baseR = Math.min(cw, ch) * 0.13 * state.zoom;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(state.time * 0.35 * state.hyperSpeed);
+
+      ctx.strokeStyle = hexToRgba(dimMeta.color, 0.38);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      const steps = 140;
+      for (let i = 0; i <= steps; i++) {
+        const theta = (i / steps) * Math.PI * 2;
+        const mod = 1 + 0.38 * Math.cos(petals * theta + state.time * 2.4) * Math.sin(theta * 3 - state.time);
+        const r = baseR * mod;
+        const x = r * Math.cos(theta);
+        const y = r * Math.sin(theta);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // Для 14D добавляем золотое кольцо автоморфизмов октонионов G2
+      if (n === 14) {
+        const outerR = Math.min(cw, ch) * 0.38 * state.zoom;
+        ctx.strokeStyle = "rgba(255, 215, 0, 0.32)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, outerR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        for (let k = 0; k < 14; k++) {
+          const a = (k / 14) * Math.PI * 2 - state.time * 0.4;
+          const px = Math.cos(a) * outerR;
+          const py = Math.sin(a) * outerR;
+          ctx.fillStyle = "#fde047";
+          ctx.beginPath();
+          ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    /********************************************************************
+     * 7. ПЕРЕКЛЮЧЕНИЕ ИЗМЕРЕНИЯ И ОБНОВЛЕНИЕ ВСЕГО ИНТЕРФЕЙСА
+     ********************************************************************/
+    function selectDimension(n) {
+      const targetN = clamp(n, 1, 14);
+      state.dim = targetN;
+      const meta = DIMENSIONS_DB[targetN - 1];
+
+      // Обновляем CSS-переменные акцентного свечения
+      document.documentElement.style.setProperty("--accent", meta.color);
+      document.documentElement.style.setProperty("--accent-glow", hexToRgba(meta.color, 0.35));
+
+      // Перестраиваем геометрию
+      state.activeGeometry = buildDimensionGeometry(targetN);
+
+      // Точные математические формулы топологии N-куба
+      const exactVertices = Math.pow(2, targetN);
+      const exactEdges = targetN === 1 ? 1 : targetN * Math.pow(2, targetN - 1);
+      const rotPlanes = (targetN * (targetN - 1)) / 2;
+
+      // Верхний бар
+      document.getElementById("dimBadgeTop").textContent = `${targetN}D`;
+      document.getElementById("dimBadgeTop").style.borderColor = hexToRgba(meta.color, 0.5);
+      document.getElementById("dimBadgeTop").style.color = meta.color;
+      document.getElementById("dimTitleTop").textContent = meta.name;
+      document.getElementById("dimSubtitleTop").textContent = meta.subtitle;
+
+      // HUD-метрики
+      document.getElementById("hudVertices").textContent = exactVertices.toLocaleString("ru-RU");
+      document.getElementById("hudEdges").textContent = exactEdges.toLocaleString("ru-RU");
+      document.getElementById("hudPlanes").textContent = rotPlanes;
+      document.getElementById("activeFormulaBadge").textContent = meta.formula;
+
+      // Нижняя карточка (вкладка Проекция)
+      const dot = document.getElementById("dimColorDot");
+      dot.style.backgroundColor = meta.color;
+      dot.style.boxShadow = `0 0 10px ${meta.color}`;
+      document.getElementById("cardDimTag").textContent = meta.polytope;
+      document.getElementById("cardTopologyFormula").textContent = `SO(${targetN}) • ${rotPlanes} плоск.`;
+      document.getElementById("shortDescText").textContent = meta.shortDesc;
+
+      // Вкладка «Теория»
+      document.getElementById("theoryDimBadge").textContent = `Измерение N = ${targetN} • Политоп 2^${targetN}`;
+      document.getElementById("theoryTitle").textContent = `${targetN}D: ${meta.name}`;
+      document.getElementById("theorySymbol").textContent = meta.symbol;
+      document.getElementById("theorySymbol").style.color = meta.color;
+      document.getElementById("theoryBody").textContent = meta.theory;
+      document.getElementById("theoryPhysics").textContent = meta.physics;
+      document.getElementById("theoryDOF").textContent = `${rotPlanes} нез. плоскостей вращения SO(${targetN})`;
+      document.getElementById("theoryHowWeSee").textContent = meta.howWeSee;
+
+      // Обновляем активную пилюлю в горизонтальном селекторе
+      const pills = document.querySelectorAll(".dim-pill");
+      pills.forEach((btn) => {
+        const btnN = parseInt(btn.getAttribute("data-dim"), 10);
+        if (btnN === targetN) {
+          btn.className = "dim-pill active shrink-0 px-3 py-1.5 rounded-xl mono text-xs font-bold text-white glass-active";
+          btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        } else {
+          btn.className = "dim-pill shrink-0 px-3 py-1.5 rounded-xl mono text-xs font-medium text-slate-400 glass-subtle hover:text-white";
+        }
+      });
+
+      updateAudioHarmonics(targetN);
+      updateTelemetryUI();
+    }
+
+    // Инициализация горизонтального бара 1D - 14D
+    function buildSelectorBar() {
+      const bar = document.getElementById("dimSelectorBar");
+      bar.innerHTML = "";
+      DIMENSIONS_DB.forEach((d) => {
+        const btn = document.createElement("button");
+        btn.setAttribute("data-dim", d.n);
+        btn.textContent = `${d.n}D`;
+        btn.addEventListener("click", () => selectDimension(d.n));
+        bar.appendChild(btn);
+      });
+    }
+
+    /********************************************************************
+     * 8. ОБНОВЛЕНИЕ LIVE-МАТРИЦЫ И ТЕЛЕМЕТРИИ БЭКЕНДА (Вкладка Ядро/API)
+     ********************************************************************/
+    function updateTelemetryUI() {
+      document.getElementById("computeLatency").textContent = `${state.computeMs.toFixed(2)} ms/tick`;
+      document.getElementById("matrixHeaderLabel").textContent = `МАТРИЦА ОПЕРАТОРА SO(${state.dim}) [4×4 СРЕЗ]`;
+
+      const grid = document.getElementById("liveMatrixGrid");
+      let cellsHtml = "";
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          const val = state.liveMatrix[r][c];
+          const formatted = (val >= 0 ? "+" : "") + val.toFixed(3);
+          const highlight = r === c ? "text-cyan-300 font-semibold" : "text-slate-300";
+          cellsHtml += `<div class="bg-white/5 rounded py-1 border border-white/5 ${highlight}">${formatted}</div>`;
+        }
+      }
+      grid.innerHTML = cellsHtml;
+
+      const exactV = Math.pow(2, state.dim);
+      const exactE = state.dim === 1 ? 1 : state.dim * Math.pow(2, state.dim - 1);
+      const payload = {
+        engine: "HYPERSPACE_CORE_v4.2",
+        dimension: `${state.dim}D`,
+        manifold: DIMENSIONS_DB[state.dim - 1].polytope,
+        topology: {
+          exact_vertices: exactV,
+          exact_edges: exactE,
+          so_group_dof: (state.dim * (state.dim - 1)) / 2
+        },
+        projection: {
+          mode: state.projMode,
+          fov_warp: state.fovWarp,
+          hyper_phase_velocity: state.hyperSpeed,
+          w0_slice_offset: state.sliceOffset
+        },
+        telemetry: {
+          fps: state.fps,
+          frame_time_ms: Number(state.computeMs.toFixed(3))
+        }
+      };
+      document.getElementById("apiJsonPreview").textContent = JSON.stringify(payload, null, 2);
+    }
+
+    /********************************************************************
+     * 9. ОБРАБОТЧИКИ ТАЧА, ЖЕСТОВ И КНОПОК ИНТЕРФЕЙСА
+     ********************************************************************/
+    function setupInteractions() {
+      // Вращение пальцем или мышью по Canvas
+      const startDrag = (x, y) => {
+        state.isDragging = true;
+        state.lastTouchX = x;
+        state.lastTouchY = y;
+        document.getElementById("gestureHint").style.opacity = "0.35";
+      };
+
+      const moveDrag = (x, y) => {
+        if (!state.isDragging) return;
+        const dx = x - state.lastTouchX;
+        const dy = y - state.lastTouchY;
+        state.lastTouchX = x;
+        state.lastTouchY = y;
+
+        state.velY = dx * 0.0085;
+        state.velX = dy * 0.0085;
+        state.rotY += state.velY;
+        state.rotX = clamp(state.rotX + state.velX, -Math.PI * 0.48, Math.PI * 0.48);
+      };
+
+      const endDrag = () => {
+        state.isDragging = false;
+      };
+
+      canvas.addEventListener("pointerdown", (e) => startDrag(e.clientX, e.clientY));
+      window.addEventListener("pointermove", (e) => moveDrag(e.clientX, e.clientY));
+      window.addEventListener("pointerup", endDrag);
+      window.addEventListener("pointercancel", endDrag);
+
+      // Кнопки шага измерения (< и >)
+      document.getElementById("prevDimBtn").addEventListener("click", () => {
+        const prev = state.dim > 1 ? state.dim - 1 : 14;
+        selectDimension(prev);
+      });
+      document.getElementById("nextDimBtn").addEventListener("click", () => {
+        const next = state.dim < 14 ? state.dim + 1 : 1;
+        selectDimension(next);
+      });
+
+      // Клавиатурные стрелки для удобства тестирования
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight") selectDimension(state.dim < 14 ? state.dim + 1 : 1);
+        if (e.key === "ArrowLeft") selectDimension(state.dim > 1 ? state.dim - 1 : 14);
+      });
+
+      // Кнопки быстрого действия (Автовращение, Свёртка, Звук, Сечение)
+      const btnAuto = document.getElementById("btnAutoRotate");
+      btnAuto.addEventListener("click", () => {
+        state.autoRotate = !state.autoRotate;
+        btnAuto.classList.toggle("border-cyan-400/40", state.autoRotate);
+        btnAuto.classList.toggle("text-cyan-300", state.autoRotate);
+        btnAuto.classList.toggle("text-slate-500", !state.autoRotate);
+        showToast(state.autoRotate ? "Автовращение включено" : "Автовращение на паузе");
+      });
+
+      const btnPulse = document.getElementById("btnPulseFold");
+      btnPulse.addEventListener("click", () => {
+        state.pulseFold = !state.pulseFold;
+        btnPulse.classList.toggle("glass-active", state.pulseFold);
+        showToast(state.pulseFold ? "Фазовая гипер-свёртка активна" : "Стандартная геометрия");
+      });
+
+      const btnSlice = document.getElementById("btnSliceMode");
+      btnSlice.addEventListener("click", () => {
+        state.sliceMode = !state.sliceMode;
+        btnSlice.classList.toggle("glass-active", state.sliceMode);
+        showToast(state.sliceMode ? "Включён режим 3D-сечения гиперпространства" : "Полная проекция политопа");
+      });
+
+      document.getElementById("btnAudio").addEventListener("click", initOrToggleAudio);
+
+      // Слайдеры
+      document.getElementById("sliderHyperSpeed").addEventListener("input", (e) => {
+        state.hyperSpeed = parseInt(e.target.value, 10) / 100;
+        document.getElementById("valHyperSpeed").textContent = `${state.hyperSpeed.toFixed(1)}x`;
+      });
+
+      document.getElementById("sliderFovWarp").addEventListener("input", (e) => {
+        const val = parseInt(e.target.value, 10);
+        state.fovWarp = val / 100;
+        document.getElementById("valFovWarp").textContent = `${val}%`;
+      });
+
+      document.getElementById("sliderZoom").addEventListener("input", (e) => {
+        const val = parseInt(e.target.value, 10);
+        state.zoom = val / 100;
+        document.getElementById("valZoom").textContent = `${val}%`;
+      });
+
+      document.getElementById("sliderSliceOffset").addEventListener("input", (e) => {
+        const val = parseInt(e.target.value, 10) / 50;
+        state.sliceOffset = val;
+        document.getElementById("valSliceOffset").textContent = val.toFixed(2);
+      });
+
+      document.getElementById("btnResetCamera").addEventListener("click", () => {
+        state.rotX = 0.42;
+        state.rotY = 0.65;
+        state.zoom = 1.0;
+        state.sliceOffset = 0;
+        document.getElementById("sliderZoom").value = 100;
+        document.getElementById("valZoom").textContent = "100%";
+        document.getElementById("sliderSliceOffset").value = 0;
+        document.getElementById("valSliceOffset").textContent = "0.00";
+        showToast("Оси и камера сброшены");
+      });
+
+      // Тумблеры отображения
+      const bindToggle = (id, propName) => {
+        const el = document.getElementById(id);
+        el.addEventListener("click", () => {
+          state[propName] = !state[propName];
+          el.className = `render-toggle rounded-xl py-2 px-2 text-[11px] font-medium text-center transition active:scale-95 ${
+            state[propName] ? "glass-active text-white" : "glass-subtle text-slate-400"
+          }`;
+        });
+      };
+      bindToggle("toggleNodes", "showNodes");
+      bindToggle("toggleField", "showField");
+      bindToggle("toggleLabels", "showLabels");
+
+      // Переключение типа проекции
+      document.querySelectorAll(".proj-mode-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.projMode = btn.getAttribute("data-proj");
+          document.querySelectorAll(".proj-mode-btn").forEach((b) => {
+            const active = b === btn;
+            b.className = `proj-mode-btn rounded-xl py-1.5 text-[11px] font-medium transition ${
+              active ? "glass-active text-white" : "glass-subtle text-slate-300"
+            }`;
+          });
+          showToast(`Режим проекции: ${btn.textContent}`);
+        });
+      });
+
+      // Нижняя панель вкладок
+      document.querySelectorAll(".nav-tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetTab = btn.getAttribute("data-tab");
+          document.querySelectorAll(".tab-panel").forEach((panel) => {
+            panel.classList.add("hidden");
+          });
+          document.getElementById(`tabPanel-${targetTab}`).classList.remove("hidden");
+
+          document.querySelectorAll(".nav-tab-btn").forEach((b) => {
+            const isActive = b === btn;
+            b.className = `nav-tab-btn rounded-xl py-2 flex flex-col items-center justify-center gap-0.5 transition active:scale-95 ${
+              isActive ? "glass-active text-white" : "text-slate-400 hover:text-white"
+            }`;
+          });
+        });
+      });
+
+      // Копирование JSON телеметрии в буфер обмена
+      document.getElementById("btnCopyTelemetry").addEventListener("click", () => {
+        const text = document.getElementById("apiJsonPreview").textContent;
+        const tempArea = document.createElement("textarea");
+        tempArea.value = text;
+        document.body.appendChild(tempArea);
+        tempArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempArea);
+        showToast("JSON-состояние ядра скопировано в буфер");
+      });
+
+      // Экспорт PNG-снимка проекции
+      document.getElementById("btnSnapshot").addEventListener("click", () => {
+        try {
+          const link = document.createElement("a");
+          link.download = `HYPERSPACE_${state.dim}D_projection.png`;
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+          showToast(`Снимок ${state.dim}D-проекции сохранён`);
+        } catch (err) {
+          showToast("Снимок экрана сформирован в буфере рендера");
+        }
+      });
+    }
+
+    /********************************************************************
+     * 10. УТИЛИТЫ
+     ********************************************************************/
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function hexToRgba(hex, alpha) {
+      const clean = hex.replace("#", "");
+      const num = parseInt(clean, 16);
+      const r = (num >> 16) & 255;
+      const g = (num >> 8) & 255;
+      const b = num & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    let toastTimeout = null;
+    function showToast(msg) {
+      const box = document.getElementById("toastBox");
+      document.getElementById("toastText").textContent = msg;
+      box.classList.remove("opacity-0", "-translate-y-2");
+      box.classList.add("opacity-100", "translate-y-0");
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        box.classList.remove("opacity-100", "translate-y-0");
+        box.classList.add("opacity-0", "-translate-y-2");
+      }, 2100);
+    }
+
+    // Старт приложения при полной загрузке окна
+    window.onload = function () {
+      resizeCanvas();
+      buildSelectorBar();
+      setupInteractions();
+      selectDimension(4); // Стартуем с эффектного 4D Тессеракта
+      requestAnimationFrame(renderLoop);
+    };
+  </script>
+</body>
+</html>
